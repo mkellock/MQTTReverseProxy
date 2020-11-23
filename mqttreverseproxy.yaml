@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mqttreverseproxy-service
+spec:
+  selector:
+    app: mqttreverseproxy
+  ports:
+  - protocol: TCP
+    port: 8883
+    targetPort: 8883
+    nodePort: 31544
+    name: mqtt
+  type: LoadBalancer
+  sessionAffinity: None
+  externalTrafficPolicy: Cluster
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mqttreverseproxy-deployment
+spec:
+  selector:
+    matchLabels:
+      app: mqttreverseproxy
+  template:
+    metadata:
+      labels:
+        app: mqttreverseproxy
+    spec:
+      containers:
+      - name: mqttreverseproxy
+        image: mkellock/mqttreverseproxy:v1
+        ports:
+        - containerPort: 8883
+          name: mqtt
+        readinessProbe:
+          tcpSocket:
+            port: 8883
+        livenessProbe:
+            tcpSocket:
+              port: 8883
+        resources:
+          requests:
+            memory: "16Mi"
+            cpu: "600m"
+          limits:
+            memory: "32Mi"
+            cpu: "1000m"
+---
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mqttreverseproxy-autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mqttreverseproxy-deployment
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
